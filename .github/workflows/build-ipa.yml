@@ -1,0 +1,75 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Chepushka Live IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Build Xcode Archive
+        run: |
+          xcodebuild clean archive \
+            -project ChepushkaLive.xcodeproj \
+            -scheme ChepushkaLive \
+            -destination "generic/platform=iOS" \
+            -archivePath build/ChepushkaLive.xcarchive \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
+
+      - name: Package Payload into IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -r build/ChepushkaLive.xcarchive/Products/Applications/ChepushkaLive.app build/ipa/Payload/
+          cd build/ipa
+          zip -r -9 ChepushkaLive.ipa Payload
+          ls -la ChepushkaLive.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChepushkaLive-v1.0.${{ github.run_number }}
+          path: build/ipa/ChepushkaLive.ipa
+          retention-days: 30
+
+      - name: Create GitHub Release with IPA
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/main')
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "Чепушка Live iOS v1.0.${{ github.run_number }}"
+          body: |
+            ## Чепушка Live для iPhone 📱
+
+            Официальный файл `.ipa` для установки через:
+            - **AltStore**
+            - **Sideloadly**
+            - **TrollStore**
+            - **Scarlet / Esign**
+
+            ### Что включено:
+            - Полноценная лента видео и прямых эфиров
+            - Просмотр видео с нативным плеером и AirPlay
+            - Профиль автора канала, подписки и отписки
+            - Авторизация и сохранение сессии
+          files: build/ipa/ChepushkaLive.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
